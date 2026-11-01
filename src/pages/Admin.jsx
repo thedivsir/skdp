@@ -129,12 +129,18 @@ function SortTh({ label, field, sortKey, sortDir, onSort }) {
 }
 
 /* ─────────────────────────────────────────────────────────
-   Export CSV helper
+   Export CSV helper — CSV injection safe
 ───────────────────────────────────────────────────────── */
+function sanitizeCsvCell(value) {
+  const str = (value ?? "").toString().replace(/"/g, '""');
+  // Prevent formula injection: prefix dangerous chars with tab
+  return /^[=+\-@\t\r]/.test(str) ? `\t${str}` : str;
+}
+
 function exportCSV(rows, columns, filename) {
   const header = columns.map((c) => c.label).join(",");
   const body = rows
-    .map((r) => columns.map((c) => `"${(r[c.key] ?? "").toString().replace(/"/g, '""')}"`).join(","))
+    .map((r) => columns.map((c) => `"${sanitizeCsvCell(r[c.key])}"`).join(","))
     .join("\n");
   const blob = new Blob([`\uFEFF${header}\n${body}`], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
@@ -495,6 +501,27 @@ function LiveDarshanSection({ config, onSave }) {
 
   const handleSave = async (e) => {
     e.preventDefault();
+
+    // Validate YouTube URL
+    if (videoUrl.trim()) {
+      try {
+        const parsed = new URL(videoUrl.trim());
+        const host = parsed.hostname.replace(/^www\./, "");
+        const allowedHosts = ["youtube.com", "youtu.be", "m.youtube.com"];
+        if (!allowedHosts.includes(host)) {
+          setError("केवल YouTube URL स्वीकार किया जाएगा।");
+          return;
+        }
+        if (parsed.protocol !== "https:") {
+          setError("केवल HTTPS YouTube URL स्वीकार किया जाएगा।");
+          return;
+        }
+      } catch {
+        setError("कृपया सही YouTube URL दर्ज करें।");
+        return;
+      }
+    }
+
     if (!videoUrl.trim() && status === "live") {
       setError("लाइव स्थिति के लिए YouTube URL आवश्यक है।");
       return;

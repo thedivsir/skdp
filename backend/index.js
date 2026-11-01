@@ -1,67 +1,99 @@
-const express = require("express");
-const cors    = require("cors");
-const crypto  = require("crypto");
+"use strict";
+
+const express  = require("express");
+const cors     = require("cors");
+const crypto   = require("crypto");
+const helmet   = require("helmet");
 const Razorpay = require("razorpay");
 require("dotenv").config();
+
+/* ─────────────────────────────────────────────────────────
+   STARTUP GUARD — crash fast if credentials are missing
+───────────────────────────────────────────────────────── */
+if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+  console.error("FATAL: RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET is not set. Exiting.");
+  process.exit(1);
+}
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
 
 /* ─────────────────────────────────────────────────────────
+   Security headers via helmet
+───────────────────────────────────────────────────────── */
+app.use(helmet({
+  contentSecurityPolicy: false, // CSP set in Firebase hosting headers
+}));
+
+/* ─────────────────────────────────────────────────────────
    CORS — sirf apni website se requests allow karo
 ───────────────────────────────────────────────────────── */
+const allowedOrigins = [
+  "https://shree-kailash-dham.web.app",
+  "https://shree-kailash-dham.firebaseapp.com",
+  "http://localhost:5173",
+];
+
 app.use(cors({
-  origin: [
-    "https://shree-kailash-dham.web.app",
-    "https://shree-kailash-dham.firebaseapp.com",
-    "http://localhost:5173",
-  ],
+  origin: (origin, callback) => {
+    // Allow requests with no origin (server-to-server, Render health checks)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error("CORS not allowed"), false);
+  },
   methods: ["GET", "POST"],
   credentials: true,
 }));
 
-app.use(express.json({ limit: "10kb" })); // large payload attack se bachao
+// JSON body limit — large payload attack se bachao
+app.use(express.json({ limit: "10kb" }));
 
 /* ─────────────────────────────────────────────────────────
-   Simple Rate Limiter — bina kisi library ke
-   Har IP se 30 requests/minute allow karo
+   In-process Rate Limiter
+   Har IP se max 20 payment requests per minute
 ───────────────────────────────────────────────────────── */
 const rateMap = new Map();
+const RATE_WINDOW_MS  = 60_000;
+const RATE_MAX        = 20;
+const RATE_CLEANUP_MS = 120_000;
 
 function rateLimit(req, res, next) {
-  const ip  = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
-  const now = Date.now();
-  const windowMs = 60_000; // 1 minute
-  const maxRequests = 30;
+  // Render sets x-forwarded-for; take rightmost value to prevent spoofing
+  const forwarded = req.headers["x-forwarded-for"];
+  const ip = forwarded
+    ? forwarded.split(",").pop().trim()
+    : req.socket.remoteAddress || "unknown";
 
+  const now   = Date.now();
   const entry = rateMap.get(ip) || { count: 0, start: now };
 
-  if (now - entry.start > windowMs) {
-    // Window reset
+  if (now - entry.start > RATE_WINDOW_MS) {
     rateMap.set(ip, { count: 1, start: now });
     return next();
   }
 
-  entry.count++;
+  entry.count += 1;
   rateMap.set(ip, entry);
 
-  if (entry.count > maxRequests) {
-    return res.status(429).json({ message: "बहुत अधिक अनुरोध। कृपया 1 मिनट बाद प्रयास करें।" });
+  if (entry.count > RATE_MAX) {
+    return res.status(429).json({
+      message: "बहुत अधिक अनुरोध। कृपया 1 मिनट बाद प्रयास करें।",
+    });
   }
 
-  next();
+  return next();
 }
 
-// Old entries clean karo memory leak se bachne ke liye
+// Cleanup stale entries every 2 minutes
 setInterval(() => {
-  const now = Date.now();
+  const cutoff = Date.now() - RATE_CLEANUP_MS;
   for (const [ip, entry] of rateMap.entries()) {
-    if (now - entry.start > 120_000) rateMap.delete(ip);
+    if (entry.start < cutoff) rateMap.delete(ip);
   }
-}, 120_000);
+}, RATE_CLEANUP_MS);
 
 /* ─────────────────────────────────────────────────────────
-   Input Sanitization Helper
+   Input helpers
 ───────────────────────────────────────────────────────── */
 function sanitizeString(value, maxLength = 200) {
   if (typeof value !== "string") return "";
@@ -72,32 +104,39 @@ function isValidMobile(mobile) {
   return /^[6-9]\d{9}$/.test(mobile);
 }
 
-function isValidEmail(email) {
-  if (!email) return true; // optional field
+// Returns true if email is empty (optional field) or a valid address
+function isEmailValidOrEmpty(email) {
+  if (!email) return true;
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254;
 }
 
-function isValidDate(dateStr) {
+function isFutureDateOrToday(dateStr) {
   if (!dateStr) return false;
   const date = new Date(`${dateStr}T00:00:00`);
-  return !isNaN(date.getTime());
+  if (isNaN(date.getTime())) return false;
+  // Compare date only (no time) in IST — strip time component
+  const todayIST = new Date(
+    new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
+  );
+  return date >= todayIST;
 }
 
 /* ─────────────────────────────────────────────────────────
-   Timing-safe Signature Verification
+   Timing-safe signature verification
 ───────────────────────────────────────────────────────── */
-function verifySignature(orderId, paymentId, receivedSignature) {
-  const expectedSignature = crypto
-    .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-    .update(`${orderId}|${paymentId}`)
-    .digest("hex");
-
-  // Timing-safe comparison — prevents timing attacks
+function verifyRazorpaySignature(orderId, paymentId, receivedSig) {
   try {
-    return crypto.timingSafeEqual(
-      Buffer.from(expectedSignature, "hex"),
-      Buffer.from(receivedSignature,  "hex")
-    );
+    const expected = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(`${orderId}|${paymentId}`)
+      .digest("hex");
+
+    // Pad to same length before timingSafeEqual to avoid length-mismatch crash
+    const a = Buffer.alloc(32);
+    const b = Buffer.alloc(32);
+    Buffer.from(expected,     "hex").copy(a);
+    Buffer.from(receivedSig,  "hex").copy(b);
+    return crypto.timingSafeEqual(a, b);
   } catch {
     return false;
   }
@@ -112,6 +151,16 @@ const razorpay = new Razorpay({
 });
 
 /* ─────────────────────────────────────────────────────────
+   Crypto-safe unique ticket number
+───────────────────────────────────────────────────────── */
+function generateTicketNumber() {
+  const year = new Date().getFullYear();
+  // 6 random bytes → 12 hex chars — astronomically low collision probability
+  const unique = crypto.randomBytes(6).toString("hex").toUpperCase();
+  return `SKDM-${year}-${unique}`;
+}
+
+/* ─────────────────────────────────────────────────────────
    Health check
 ───────────────────────────────────────────────────────── */
 app.get("/", (req, res) => {
@@ -122,7 +171,6 @@ app.get("/", (req, res) => {
    MEMBERSHIP ROUTES
 ═══════════════════════════════════════════════════════ */
 
-// POST /api/membership/create-order
 app.post("/api/membership/create-order", rateLimit, async (req, res) => {
   try {
     const name    = sanitizeString(req.body.name,    100);
@@ -131,22 +179,26 @@ app.post("/api/membership/create-order", rateLimit, async (req, res) => {
     const address = sanitizeString(req.body.address, 500);
     const amount  = req.body.amount;
 
-    // Validate
     if (!name || name.length < 2) {
       return res.status(400).json({ message: "कृपया सही नाम दर्ज करें।" });
     }
-
     if (!isValidMobile(mobile)) {
-      return res.status(400).json({ message: "कृपया सही 10 अंकों का मोबाइल नंबर दर्ज करें।" });
+      return res.status(400).json({ message: "कृपया 10 अंकों का सही मोबाइल नंबर दर्ज करें।" });
     }
-
-    if (!isValidEmail(email)) {
-      return res.status(400).json({ message: "कृपया सही ईमेल दर्ज करें।" });
+    if (!isEmailValidOrEmpty(email)) {
+      return res.status(400).json({ message: "कृपया सही ईमेल पता दर्ज करें।" });
+    }
+    if (!address) {
+      return res.status(400).json({ message: "कृपया पता दर्ज करें।" });
     }
 
     const membershipAmount = Number(amount);
-    if (!Number.isInteger(membershipAmount) || membershipAmount < 100 || membershipAmount > 1_000_000) {
-      return res.status(400).json({ message: "न्यूनतम सदस्यता शुल्क ₹100 है।" });
+    if (
+      !Number.isInteger(membershipAmount) ||
+      membershipAmount < 100 ||
+      membershipAmount > 100_000
+    ) {
+      return res.status(400).json({ message: "सदस्यता शुल्क ₹100 से ₹1,00,000 के बीच होना चाहिए।" });
     }
 
     const order = await razorpay.orders.create({
@@ -163,12 +215,11 @@ app.post("/api/membership/create-order", rateLimit, async (req, res) => {
       currency: order.currency,
     });
   } catch (err) {
-    console.error("Membership create-order error:", err.message);
+    console.error("[membership/create-order]", err.message);
     return res.status(500).json({ message: "भुगतान ऑर्डर नहीं बनाया जा सका।" });
   }
 });
 
-// POST /api/membership/verify-payment
 app.post("/api/membership/verify-payment", rateLimit, async (req, res) => {
   try {
     const orderId   = sanitizeString(req.body.orderId,   100);
@@ -179,15 +230,13 @@ app.post("/api/membership/verify-payment", rateLimit, async (req, res) => {
       return res.status(400).json({ message: "भुगतान विवरण अधूरा है।" });
     }
 
-    const isValid = verifySignature(orderId, paymentId, signature);
-
-    if (!isValid) {
-      return res.status(400).json({ message: "भुगतान हस्ताक्षर सही नहीं है।", verified: false });
+    if (!verifyRazorpaySignature(orderId, paymentId, signature)) {
+      return res.status(400).json({ message: "भुगतान सत्यापन असफल।", verified: false });
     }
 
     return res.json({ verified: true, paymentId, orderId });
   } catch (err) {
-    console.error("Membership verify-payment error:", err.message);
+    console.error("[membership/verify-payment]", err.message);
     return res.status(500).json({ message: "भुगतान सत्यापन में समस्या आई।" });
   }
 });
@@ -196,9 +245,8 @@ app.post("/api/membership/verify-payment", rateLimit, async (req, res) => {
    TOUR TICKET ROUTES
 ═══════════════════════════════════════════════════════ */
 
-const TICKET_PRICE = 20; // ₹20 per visitor
+const TICKET_PRICE = 20;
 
-// POST /api/tourism/create-order
 app.post("/api/tourism/create-order", rateLimit, async (req, res) => {
   try {
     const visitDate   = sanitizeString(req.body.visitDate,   10);
@@ -210,17 +258,14 @@ app.post("/api/tourism/create-order", rateLimit, async (req, res) => {
     if (!contactName || contactName.length < 2) {
       return res.status(400).json({ message: "कृपया सही नाम दर्ज करें।" });
     }
-
     if (!isValidMobile(mobile)) {
-      return res.status(400).json({ message: "कृपया सही 10 अंकों का मोबाइल नंबर दर्ज करें।" });
+      return res.status(400).json({ message: "कृपया 10 अंकों का सही मोबाइल नंबर दर्ज करें।" });
     }
-
-    if (!isValidEmail(email)) {
-      return res.status(400).json({ message: "कृपया सही ईमेल दर्ज करें।" });
+    if (!isEmailValidOrEmpty(email)) {
+      return res.status(400).json({ message: "कृपया सही ईमेल पता दर्ज करें।" });
     }
-
-    if (!isValidDate(visitDate)) {
-      return res.status(400).json({ message: "कृपया सही भ्रमण दिनांक दर्ज करें।" });
+    if (!isFutureDateOrToday(visitDate)) {
+      return res.status(400).json({ message: "कृपया आज या भविष्य की भ्रमण तारीख चुनें।" });
     }
 
     const count = Number(visitorCount);
@@ -228,14 +273,13 @@ app.post("/api/tourism/create-order", rateLimit, async (req, res) => {
       return res.status(400).json({ message: "आगंतुक संख्या 1 से 20 के बीच होनी चाहिए।" });
     }
 
-    // Server-side price calculation — client pe trust nahi karte
     const totalAmount = count * TICKET_PRICE;
-    const bookingId   = `BKG_${Date.now()}_${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
+    const bookingId   = `BKG_${Date.now()}_${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
 
     const order = await razorpay.orders.create({
       amount:   totalAmount * 100,
       currency: "INR",
-      receipt:  bookingId,
+      receipt:  bookingId.slice(0, 40), // Razorpay receipt max 40 chars
       notes:    { contactName, mobile, email, visitDate, visitorCount: String(count) },
     });
 
@@ -247,54 +291,53 @@ app.post("/api/tourism/create-order", rateLimit, async (req, res) => {
       currency:  order.currency,
     });
   } catch (err) {
-    console.error("Tourism create-order error:", err.message);
+    console.error("[tourism/create-order]", err.message);
     return res.status(500).json({ message: "बुकिंग ऑर्डर नहीं बनाया जा सका।" });
   }
 });
 
-// POST /api/tourism/verify-payment
 app.post("/api/tourism/verify-payment", rateLimit, async (req, res) => {
   try {
-    const bookingId        = sanitizeString(req.body.bookingId,            100);
-    const razorpay_order_id  = sanitizeString(req.body.razorpay_order_id,  100);
-    const razorpay_payment_id = sanitizeString(req.body.razorpay_payment_id, 100);
-    const razorpay_signature  = sanitizeString(req.body.razorpay_signature,  200);
+    const bookingId          = sanitizeString(req.body.bookingId,             100);
+    const razorpay_order_id  = sanitizeString(req.body.razorpay_order_id,     100);
+    const razorpay_payment_id = sanitizeString(req.body.razorpay_payment_id,  100);
+    const razorpay_signature  = sanitizeString(req.body.razorpay_signature,   200);
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       return res.status(400).json({ message: "भुगतान विवरण अधूरा है।" });
     }
 
-    const isValid = verifySignature(razorpay_order_id, razorpay_payment_id, razorpay_signature);
-
-    if (!isValid) {
-      return res.status(400).json({ message: "भुगतान हस्ताक्षर सही नहीं है।", verified: false });
+    if (!verifyRazorpaySignature(razorpay_order_id, razorpay_payment_id, razorpay_signature)) {
+      return res.status(400).json({ message: "भुगतान सत्यापन असफल।", verified: false });
     }
-
-    const year         = new Date().getFullYear();
-    const seq          = String(Math.floor(Math.random() * 900000) + 100000);
-    const ticketNumber = `SKDM-${year}-${seq}`;
 
     return res.json({
       verified:     true,
-      ticketNumber,
+      ticketNumber: generateTicketNumber(),
       bookingId:    bookingId || razorpay_order_id,
       paymentId:    razorpay_payment_id,
     });
   } catch (err) {
-    console.error("Tourism verify-payment error:", err.message);
+    console.error("[tourism/verify-payment]", err.message);
     return res.status(500).json({ message: "भुगतान सत्यापन में समस्या आई।" });
   }
 });
 
 /* ─────────────────────────────────────────────────────────
-   404 handler
+   404 + Global error handler
 ───────────────────────────────────────────────────────── */
 app.use((req, res) => {
-  res.status(404).json({ message: "Route not found" });
+  res.status(404).json({ message: "Not found" });
+});
+
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error("[unhandled]", err.message);
+  res.status(500).json({ message: "Internal server error" });
 });
 
 /* ─────────────────────────────────────────────────────────
-   Start server
+   Start
 ───────────────────────────────────────────────────────── */
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

@@ -109,9 +109,10 @@ export default function Membership() {
 
     if (
       !Number.isSafeInteger(membershipAmount) ||
-      membershipAmount < 100
+      membershipAmount < 100 ||
+      membershipAmount > 100_000
     ) {
-      next.amount = "न्यूनतम सदस्यता शुल्क ₹100 होना चाहिए।";
+      next.amount = "सदस्यता शुल्क ₹100 से ₹1,00,000 के बीच होना चाहिए।";
     }
 
     setErrors(next);
@@ -618,6 +619,7 @@ export default function Membership() {
               <textarea
                 id="member-address"
                 rows={3}
+                maxLength={500}
                 autoComplete="street-address"
                 value={form.address}
                 onChange={(event) =>
