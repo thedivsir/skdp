@@ -1,0 +1,546 @@
+.tour-ticket-receipt {
+  position: fixed;
+  left: -100000px;
+  top: 0;
+  width: 794px;
+  height: 1123px;
+  overflow: hidden;
+  background: #fffdf8;
+  color: #321b1e;
+  font-family:
+    "Noto Sans Devanagari",
+    "Nirmala UI",
+    "Mangal",
+    Arial,
+    sans-serif;
+}
+
+.ttr-page {
+  position: relative;
+  width: 794px;
+  height: 1123px;
+  overflow: hidden;
+  box-sizing: border-box;
+  padding: 46px 48px 42px;
+  background: linear-gradient(
+    rgba(255, 253, 248, 0.96),
+    rgba(255, 253, 248, 0.96)
+  );
+}
+
+/* =========================================================
+   DECORATIVE FRAME
+========================================================= */
+
+.ttr-frame {
+  position: absolute;
+  inset: 14px;
+  border: 2px solid #c8a64b;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.ttr-frame-inner {
+  position: absolute;
+  inset: 22px;
+  border: 1px solid rgba(107, 31, 42, 0.28);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.ttr-frame::before,
+.ttr-frame::after {
+  content: "✦";
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fffdf8;
+  color: #b78a28;
+  font-size: 22px;
+}
+
+.ttr-frame::before {
+  top: -17px;
+  left: -17px;
+}
+
+.ttr-frame::after {
+  right: -17px;
+  bottom: -17px;
+}
+
+/* =========================================================
+   WATERMARK
+========================================================= */
+
+.ttr-watermark {
+  position: absolute;
+  z-index: 1;
+  width: 470px;
+  height: 470px;
+  left: 50%;
+  top: 58%;
+  transform: translate(-50%, -50%);
+  object-fit: contain;
+  opacity: 0.075;
+  filter: grayscale(100%);
+  pointer-events: none;
+}
+
+/* =========================================================
+   CONTENT LAYER
+========================================================= */
+
+.ttr-content {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+}
+
+/* =========================================================
+   HEADER
+========================================================= */
+
+.ttr-header {
+  text-align: center;
+}
+
+.ttr-devotional-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 8px 8px;
+  color: #6b1f2a;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.ttr-logo {
+  display: block;
+  width: 88px;
+  height: 88px;
+  margin: 0 auto 5px;
+  object-fit: contain;
+}
+
+.ttr-header h1 {
+  margin: 0;
+  color: #6b1f2a;
+  font-size: 27px;
+  line-height: 1.25;
+  font-weight: 800;
+}
+
+.ttr-location {
+  margin: 4px 0 0;
+  color: #765f50;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ttr-heading-decoration {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 10px auto 7px;
+}
+
+.ttr-heading-decoration span {
+  width: 70px;
+  height: 1px;
+  background: #c8a64b;
+}
+
+.ttr-heading-decoration i {
+  width: 8px;
+  height: 8px;
+  border: 1px solid #b78a28;
+  transform: rotate(45deg);
+}
+
+.ttr-header h2 {
+  margin: 0;
+  color: #6b1f2a;
+  font-size: 24px;
+  line-height: 1.35;
+  font-weight: 800;
+}
+
+.ttr-subtitle {
+  margin: 4px 0 0;
+  color: #a56d16;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* =========================================================
+   TICKET META
+========================================================= */
+
+.ttr-meta {
+  display: grid;
+  grid-template-columns: 1.45fr 1fr;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.ttr-meta-number,
+.ttr-meta-date {
+  min-height: 67px;
+  box-sizing: border-box;
+  padding: 10px 15px;
+  border: 1px solid rgba(200, 166, 75, 0.55);
+  border-radius: 10px;
+  background: rgba(255, 250, 238, 0.78);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.ttr-meta span {
+  display: block;
+  margin-bottom: 3px;
+  color: #76665d;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.ttr-meta strong {
+  display: block;
+  color: #6b1f2a;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.ttr-meta-number strong {
+  letter-spacing: 0.04em;
+}
+
+.ttr-meta-date strong {
+  font-size: 14px;
+}
+
+/* =========================================================
+   INTRO
+========================================================= */
+
+.ttr-intro {
+  margin: 12px 3px 14px;
+  color: #4f4140;
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.ttr-intro p {
+  margin: 0;
+}
+
+.ttr-intro p + p {
+  margin-top: 2px;
+}
+
+/* =========================================================
+   TWO COLUMN AREA
+========================================================= */
+
+.ttr-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* =========================================================
+   CARDS
+========================================================= */
+
+.ttr-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(200, 166, 75, 0.52);
+  border-radius: 9px;
+  background: rgba(255, 253, 248, 0.66);
+}
+
+.ttr-card-full {
+  margin-top: 14px;
+}
+
+.ttr-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 7px 11px;
+  box-sizing: border-box;
+  background: #6b1f2a;
+  color: #fffaf0;
+}
+
+.ttr-card-heading h3 {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.3;
+  font-weight: 800;
+}
+
+.ttr-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: #e5c76c;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.ttr-fields {
+  padding: 8px 12px 9px;
+}
+
+.ttr-fields-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  padding: 11px 13px;
+}
+
+.ttr-fields-three {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  padding: 11px 13px;
+}
+
+.ttr-field {
+  display: grid;
+  grid-template-columns: 94px minmax(0, 1fr);
+  gap: 7px;
+  align-items: start;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(107, 31, 42, 0.10);
+}
+
+.ttr-field:last-child {
+  border-bottom: none;
+}
+
+.ttr-field span {
+  color: #75655d;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.ttr-field strong {
+  min-width: 0;
+  color: #302427;
+  font-size: 11px;
+  line-height: 1.5;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+/* =========================================================
+   AMOUNT HIGHLIGHT CARD
+========================================================= */
+
+.ttr-amount-card {
+  margin-top: 14px;
+  border: 1px solid rgba(200, 166, 75, 0.52);
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+.ttr-amount-inner {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0;
+}
+
+.ttr-amount-cell {
+  padding: 11px 14px;
+  border-right: 1px solid rgba(200, 166, 75, 0.38);
+}
+
+.ttr-amount-cell:last-child {
+  border-right: none;
+  background: rgba(107, 31, 42, 0.05);
+}
+
+.ttr-amount-cell span {
+  display: block;
+  color: #75655d;
+  font-size: 10px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.ttr-amount-cell strong {
+  display: block;
+  color: #302427;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.ttr-amount-cell.ttr-total strong {
+  color: #6b1f2a;
+  font-size: 19px;
+}
+
+/* =========================================================
+   STATUS
+========================================================= */
+
+.ttr-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 10px 14px;
+  border: 1px solid rgba(180, 132, 35, 0.55);
+  border-radius: 9px;
+  background: rgba(200, 166, 75, 0.10);
+}
+
+.ttr-status-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 29px;
+  height: 29px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #b18426;
+  color: #fff;
+  font-size: 17px;
+  font-weight: 800;
+  padding-bottom: 4px;
+}
+
+.ttr-status span {
+  display: block;
+  color: #6d5a4e;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.ttr-status strong {
+  display: block;
+  margin-top: 1px;
+  color: #6b1f2a;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+/* =========================================================
+   NOTICE
+========================================================= */
+
+.ttr-notice {
+  margin-top: 10px;
+  padding: 10px 13px;
+  border-left: 3px solid #b18426;
+  background: rgba(255, 248, 230, 0.72);
+}
+
+.ttr-notice strong {
+  display: block;
+  color: #6b1f2a;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.ttr-notice p {
+  margin: 3px 0 0;
+  color: #534544;
+  font-size: 9.5px;
+  line-height: 1.55;
+}
+
+/* =========================================================
+   FOOTER
+========================================================= */
+
+.ttr-footer {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  align-items: end;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(200, 166, 75, 0.55);
+  color: #6b1f2a;
+  font-size: 9px;
+}
+
+.ttr-footer div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ttr-footer strong {
+  font-size: 10px;
+}
+
+.ttr-footer-mantra {
+  align-items: center;
+  text-align: center;
+}
+
+.ttr-footer-mantra span:first-child {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ttr-footer-mantra span:last-child {
+  color: #856d5d;
+}
+
+.ttr-footer-right {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.ttr-footer-right strong {
+  font-size: 11px;
+}
+
+/* =========================================================
+   PRINT
+========================================================= */
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    background: #fffdf8;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .tour-ticket-receipt,
+  .tour-ticket-receipt * {
+    visibility: visible !important;
+  }
+
+  .tour-ticket-receipt {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 794px;
+    height: 1123px;
+  }
+}

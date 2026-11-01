@@ -81,7 +81,7 @@ export default function Tourism() {
               </Link>
               <a
                 href="#floor-guide"
-                className="inline-flex items-center justify-center rounded-xl border border-[#e8c77f]/50 px-5 py-3 font-semibold text-[#fff5e4] transition hover:bg-white/10"
+                className="inline-flex items-center justify-center rounded-xl border border-[#e8c77f]/50 px-5 py-3 font-semibold !text-[#fff5e4] transition hover:bg-white/10"
               >
                 पाँचों तल देखें
               </a>
@@ -209,7 +209,7 @@ export default function Tourism() {
             </div>
             <Link
               to="/tourism/ticket"
-              className="mt-6 flex items-center justify-center gap-2 rounded-xl bg-[#7b1b26] px-5 py-3 font-bold text-white transition hover:bg-[#5f111c]"
+              className="mt-6 flex items-center justify-center gap-2 rounded-xl bg-[#7b1b26] px-5 py-3 font-bold !text-white transition hover:bg-[#5f111c]"
             >
               टिकट अनुरोध करें <ArrowRight size={18} />
             </Link>

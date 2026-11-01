@@ -61,6 +61,7 @@ function MahantMessage() {
               <p className="mt-1 text-sm text-[#f1dfbd]">
                 मुख्य पुजारी — महंत
               </p>
+              
             </div>
           </div>
 
@@ -150,11 +151,14 @@ function MahantMessage() {
 
                 <div>
                   <p className="font-serif text-lg text-[#321b1e]">
-                    पं. श्री सुशील कुमार द्विवेदी
+                    पं. सुशील पुजारी जी महराज
                   </p>
 
                   <p className="text-sm text-[#756366]">
                     मुख्य पुजारी — महंत
+                  </p>
+                  <p className="text-sm text-[#756366]">
+                  संपर्क :+91 9450737761
                   </p>
                 </div>
               </div>

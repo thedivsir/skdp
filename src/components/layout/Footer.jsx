@@ -31,7 +31,7 @@ const serviceLinks = [
     path: "/rojgaar-prashikshan",
   },
   {
-    label: "खेल भारती स्कूल गेम परियोजना",
+    label: "खेल भारती स्कूल गेम योजना",
     path: "/khel-bhaarti-school-game-pariyojna",
   },
   {
@@ -78,7 +78,6 @@ const contactDetails = [
   {
     label: "मुख्य पुजारी - महंत",
     name: "पं. श्री सुशील पुजारी जी महाराज",
-    phone: "9450737761",
   },
 ];
 
@@ -193,13 +192,6 @@ function Footer() {
                     <p className="mt-0.5 text-sm font-semibold text-[#fffaf2]">
                       {contact.name}
                     </p>
-
-                    <a
-                      href={`tel:+91${contact.phone}`}
-                      className="mt-0.5 inline-block text-sm text-[#f1dfbd]/65 transition-colors hover:text-[#e4bb5b]"
-                    >
-                      +91 {contact.phone}
-                    </a>
                   </div>
                 </div>
               ))}
@@ -407,6 +399,20 @@ function Footer() {
               className="transition-colors hover:text-[#e4bb5b]"
             >
               नियम एवं शर्तें
+            </Link>
+
+            <span
+              className="text-[#f1dfbd]/20"
+              aria-hidden="true"
+            >
+              |
+            </span>
+
+            <Link
+              to="/admin"
+              className="transition-colors hover:text-[#e4bb5b]"
+            >
+              प्रशासन पोर्टल
             </Link>
 
             <span

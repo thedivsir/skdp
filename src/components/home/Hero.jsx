@@ -110,7 +110,7 @@ function Hero() {
 
             <div className="animate-fade-up mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
-                to="/registration"
+                to="/membership"
                 className="group inline-flex items-center justify-center gap-2 rounded-full bg-[var(--color-maroon)] px-6 py-3.5 text-sm font-bold text-[var(--color-cream)] shadow-[0_10px_25px_rgba(107,31,42,0.18)] transition-all duration-300 hover:-translate-y-0.5 hover:bg-[var(--color-maroon-dark)] hover:shadow-[0_14px_30px_rgba(107,31,42,0.25)] sm:px-7"
               >
                 <CalendarDays

@@ -1,0 +1,27 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // live_darshan — sabhi public users read kar sakte hain
+    // write sirf admin karega (manually ya future auth se)
+    match /live_darshan/{docId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // memberships — public write (form submission), read allowed (admin panel)
+    match /memberships/{docId} {
+      allow read, write: if true;
+    }
+
+    // tour_bookings — public write (ticket booking), read allowed (admin panel)
+    match /tour_bookings/{docId} {
+      allow read, write: if true;
+    }
+
+    // counters — ticket number generation ke liye
+    match /counters/{docId} {
+      allow read, write: if true;
+    }
+  }
+}

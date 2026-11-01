@@ -1,11 +1,6 @@
 function TemplePersonalities() {
   const personalities = [
     {
-      role: "मंदिर प्रबंधक / सचिव",
-      name: "पं. श्री मातादीन मिश्र (बबऊ)",
-      image: "/images/temple/manager.png",
-    },
-    {
       role: "मंदिर निर्माण सेवा प्रमुख",
       name: "स्व. शंकर लाल केसरवानी चरणरज",
       image: "/images/temple/founder.png",
@@ -14,6 +9,11 @@ function TemplePersonalities() {
       role: "मुख्य पुजारी — महंत",
       name: "पं. सुशील पुजारी जी महराज",
       image: "/images/temple/mahant.png",
+    },
+    {
+      role: "मंदिर प्रबंधक / सचिव",
+      name: "पं. श्री मातादीन मिश्र (बबऊ)",
+      image: "/images/temple/manager.png",
     },
   ];
 

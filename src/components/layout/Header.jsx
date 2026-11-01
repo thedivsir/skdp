@@ -44,7 +44,7 @@ const navigationItems = [
         path: "/rojgaar-prashikshan",
       },
       {
-        label: "खेल भारती स्कूल गेम परियोजना",
+        label: "खेल भारती स्कूल गेम योजना",
         path: "/khel-bhaarti-school-game-pariyojna",
       },
       {
@@ -55,12 +55,24 @@ const navigationItems = [
         label: "माला एवं कवच सेवा",
         path: "/mala-kavach-seva",
       },
+      {
+        label: "मंदिर भ्रमण",
+        path: "/tourism",
+      },
     ],
   },
   {
     label: "पंजीकरण",
     path: "#",
     submenu: [
+      {
+        label: "सदस्यता पंजीकरण",
+        path: "/membership",
+      },
+      {
+        label: "मंदिर भ्रमण टिकट बुकिंग",
+        path: "/tourism/ticket",
+      },
       {
         label: "धार्मिक कार्यक्रम पंजीकरण",
         path: "/registration",
@@ -80,18 +92,6 @@ const navigationItems = [
       {
         label: "माला एवं कवच सेवा पंजीकरण",
         path: "/mala-kavach-seva/panjikaran",
-      },
-      {
-        label: "सदस्यता पंजीकरण",
-        path: "/membership",
-      },
-      {
-        label: "पर्यटन एवं मंदिर भ्रमण",
-        path: "/tourism",
-      },
-      {
-        label: "मंदिर भ्रमण टिकट बुकिंग",
-        path: "/tourism/ticket",
       },
     ],
   },

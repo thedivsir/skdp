@@ -15,6 +15,11 @@ dist-ssr
 .firebasesrc
 .firebase
 
+# Environment variables — never commit
+.env
+.env.local
+.env.production
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

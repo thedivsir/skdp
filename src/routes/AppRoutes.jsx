@@ -1,5 +1,5 @@
 
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Link, Navigate, Route, Routes } from "react-router-dom";
 
 import Home from "../pages/Home";
 import Registration from "../pages/Registration";
@@ -13,6 +13,21 @@ import Tourism from "../pages/Tourism";
 import TourTicket from "../pages/TourTicket";
 import Membership from "../pages/Membership";
 import Admin from "../pages/Admin";
+
+import RegistrationTabs from "../components/registration/RegistrationTabs";
+
+/* =========================================================
+   पंजीकरण पृष्ठों का साझा टैब लेआउट
+   ========================================================= */
+
+function RegistrationLayout({ children }) {
+  return (
+    <>
+      <RegistrationTabs />
+      {children}
+    </>
+  );
+}
 
 /* =========================================================
    अस्थायी पृष्ठ
@@ -67,12 +82,12 @@ function NotFoundPage() {
           आपके द्वारा खोजा गया पृष्ठ उपलब्ध नहीं है।
         </p>
 
-        <a
-          href="/"
+        <Link
+          to="/"
           className="mt-7 inline-flex items-center rounded-full bg-[var(--color-maroon)] px-5 py-3 text-sm font-bold !text-white transition-colors hover:bg-[var(--color-saffron)]"
         >
           मुख्य पृष्ठ पर जाएँ
-        </a>
+        </Link>
       </div>
     </section>
   );
@@ -95,7 +110,14 @@ function AppRoutes() {
       <Route path="/rituals" element={<Rituals />} />
 
       {/* धार्मिक कार्यक्रम पंजीकरण */}
-      <Route path="/registration" element={<Registration />} />
+      <Route
+        path="/registration"
+        element={
+          <RegistrationLayout>
+            <Registration />
+          </RegistrationLayout>
+        }
+      />
 
       {/* गैलरी */}
       <Route path="/gallery" element={<Gallery />} />
@@ -118,7 +140,7 @@ function AppRoutes() {
         path="/khel-bhaarti-school-game-pariyojna"
         element={
           <ComingSoonPage
-            title="खेल भारती स्कूल गेम परियोजना"
+            title="खेल भारती स्कूल गेम योजना"
             description="योग, वॉलीबॉल, कबड्डी और क्रिकेट से संबंधित परियोजना की विस्तृत जानकारी जल्द उपलब्ध होगी।"
           />
         }
@@ -148,9 +170,14 @@ function AppRoutes() {
         element={<Tourism />}
       />
 
+      {/* टूर टिकट बुकिंग: पंजीकरण टैब दिखाई देंगे */}
       <Route
         path="/tourism/ticket"
-        element={<TourTicket />}
+        element={
+          <RegistrationLayout>
+            <TourTicket />
+          </RegistrationLayout>
+        }
       />
 
       {/* =====================================================
@@ -160,53 +187,70 @@ function AppRoutes() {
       <Route
         path="/rojgaar-prashikshan/panjikaran"
         element={
-          <ComingSoonPage
-            title="रोज़गार प्रशिक्षण पंजीकरण"
-            description="रोज़गार प्रशिक्षण हेतु पंजीकरण फॉर्म जल्द उपलब्ध होगा।"
-          />
+          <RegistrationLayout>
+            <ComingSoonPage
+              title="रोज़गार प्रशिक्षण पंजीकरण"
+              description="रोज़गार प्रशिक्षण हेतु पंजीकरण फॉर्म जल्द उपलब्ध होगा।"
+            />
+          </RegistrationLayout>
         }
       />
 
       <Route
         path="/khel-bhaarti-school-game-pariyojna/panjikaran"
         element={
-          <ComingSoonPage
-            title="खेल भारती पंजीकरण"
-            description="योग, वॉलीबॉल, कबड्डी और क्रिकेट के लिए पंजीकरण फॉर्म जल्द उपलब्ध होगा।"
-          />
+          <RegistrationLayout>
+            <ComingSoonPage
+              title="खेल भारती पंजीकरण"
+              description="योग, वॉलीबॉल, कबड्डी और क्रिकेट के लिए पंजीकरण फॉर्म जल्द उपलब्ध होगा।"
+            />
+          </RegistrationLayout>
         }
       />
 
       <Route
         path="/property-dealership/panjikaran"
         element={
-          <ComingSoonPage
-            title="प्रॉपर्टी डीलरशिप पंजीकरण"
-            description="प्रॉपर्टी डीलरशिप से संबंधित आवेदन फॉर्म जल्द उपलब्ध होगा।"
-          />
+          <RegistrationLayout>
+            <ComingSoonPage
+              title="प्रॉपर्टी डीलरशिप पंजीकरण"
+              description="प्रॉपर्टी डीलरशिप से संबंधित आवेदन फॉर्म जल्द उपलब्ध होगा।"
+            />
+          </RegistrationLayout>
         }
       />
 
       <Route
         path="/mala-kavach-seva/panjikaran"
         element={
-          <ComingSoonPage
-            title="माला एवं कवच सेवा पंजीकरण"
-            description="माला एवं कवच सेवा हेतु सेवा अनुरोध फॉर्म जल्द उपलब्ध होगा।"
-          />
+          <RegistrationLayout>
+            <ComingSoonPage
+              title="माला एवं कवच सेवा पंजीकरण"
+              description="माला एवं कवच सेवा हेतु सेवा अनुरोध फॉर्म जल्द उपलब्ध होगा।"
+            />
+          </RegistrationLayout>
         }
       />
 
-      {/* सदस्यता और सदस्यता पंजीकरण */}
-      <Route
-        path="/membership"
-        element={<Membership />}
-      />
-
+      {/* सदस्यता पंजीकरण */}
       <Route
         path="/membership/panjikaran"
-        element={<Membership />}
+        element={
+          <RegistrationLayout>
+            <Membership />
+          </RegistrationLayout>
+        }
       />
+
+     {/* सदस्यता पृष्ठ: पंजीकरण टैब के साथ */}
+<Route
+  path="/membership"
+  element={
+    <RegistrationLayout>
+      <Membership />
+    </RegistrationLayout>
+  }
+/>
 
       {/* =====================================================
           दान एवं लाइव दर्शन
