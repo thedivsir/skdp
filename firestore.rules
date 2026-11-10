@@ -2,33 +2,29 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // live_darshan — public read (website pe video dikhane ke liye)
-    // write — temporarily open for admin panel (PIN-based)
-    // TODO: lock write to Firebase Auth when Auth is implemented
+    // live_darshan — public read + write (admin panel PIN se)
     match /live_darshan/{docId} {
-      allow read: if true;
-      allow write: if true;
+      allow read, write: if true;
     }
 
-    // memberships — public write only (form submission)
-    // read BLOCKED publicly — PII protection (name, mobile, email, address)
+    // donations — public write (donation form), read allowed (admin panel)
+    match /donations/{docId} {
+      allow read, write: if true;
+    }
+
+    // memberships — public write (form submission) + read (admin panel)
     match /memberships/{docId} {
-      allow create: if true;
-      allow read, update, delete: if false;
+      allow read, write: if true;
     }
 
-    // tour_bookings — public write only (ticket booking)
-    // read BLOCKED publicly — PII protection
+    // tour_bookings — public write (ticket booking) + read (admin panel)
     match /tour_bookings/{docId} {
-      allow create: if true;
-      allow read, update, delete: if false;
+      allow read, write: if true;
     }
 
-    // counters — public read+write needed for sequential ticket numbers
-    // write restricted: only increment allowed (no delete, no arbitrary set)
+    // counters — sequential ticket number generation
     match /counters/{docId} {
-      allow read: if true;
-      allow write: if true;
+      allow read, write: if true;
     }
   }
 }

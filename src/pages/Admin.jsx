@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronUp,
   Download,
+  Heart,
   IndianRupee,
   LayoutDashboard,
   Link2,
@@ -254,12 +255,13 @@ function MembershipsSection({ data, loading }) {
   }, [data, search, sortKey, sortDir]);
 
   const csvCols = [
-    { key: "name", label: "नाम" },
-    { key: "mobile", label: "मोबाइल" },
-    { key: "email", label: "ईमेल" },
-    { key: "address", label: "पता" },
-    { key: "amount", label: "शुल्क" },
-    { key: "status", label: "स्थिति" },
+    { key: "name",      label: "नाम"    },
+    { key: "mobile",    label: "मोबाइल" },
+    { key: "email",     label: "ईमेल"   },
+    { key: "address",   label: "पता"    },
+    { key: "amount",    label: "शुल्क"  },
+    { key: "utrNumber", label: "UTR"    },
+    { key: "status",    label: "स्थिति" },
   ];
 
   return (
@@ -309,6 +311,7 @@ function MembershipsSection({ data, loading }) {
                   <th className="px-4 py-3 text-[11px] font-semibold text-[#9b8880]">ईमेल</th>
                   <th className="px-4 py-3 text-[11px] font-semibold text-[#9b8880]">पता</th>
                   <SortTh label="शुल्क" field="amount" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                  <th className="px-4 py-3 text-[11px] font-semibold text-[#9b8880]">UTR</th>
                   <th className="px-4 py-3 text-[11px] font-semibold text-[#9b8880]">स्थिति</th>
                   <SortTh label="दिनांक" field="submittedAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                 </tr>
@@ -322,6 +325,7 @@ function MembershipsSection({ data, loading }) {
                     <td className="max-w-[160px] truncate px-4 py-3.5 text-xs text-[#6f5b55]">{row.email || "—"}</td>
                     <td className="max-w-[180px] truncate px-4 py-3.5 text-xs text-[#6f5b55]">{row.address || "—"}</td>
                     <td className="px-4 py-3.5 text-sm font-bold text-[#4a1720]">{rupee(row.amount)}</td>
+                    <td className="px-4 py-3.5 text-xs font-mono text-[#6f5b55]">{row.utrNumber || "—"}</td>
                     <td className="px-4 py-3.5"><StatusBadge status={row.status} /></td>
                     <td className="px-4 py-3.5 text-xs text-[#9b8880]">{formatTimestamp(row.submittedAt)}</td>
                   </tr>
@@ -384,13 +388,14 @@ function TourBookingsSection({ data, loading }) {
   }, [data, search, sortKey, sortDir]);
 
   const csvCols = [
-    { key: "ticketNumber", label: "टिकट संख्या" },
-    { key: "contactName", label: "नाम" },
-    { key: "mobile", label: "मोबाइल" },
-    { key: "email", label: "ईमेल" },
-    { key: "visitDate", label: "भ्रमण दिनांक" },
-    { key: "visitorCount", label: "आगंतुक" },
-    { key: "amount", label: "शुल्क" },
+    { key: "ticketNumber",  label: "टिकट संख्या"  },
+    { key: "contactName",   label: "नाम"           },
+    { key: "mobile",        label: "मोबाइल"        },
+    { key: "email",         label: "ईमेल"          },
+    { key: "visitDate",     label: "भ्रमण दिनांक"  },
+    { key: "visitorCount",  label: "आगंतुक"        },
+    { key: "amount",        label: "शुल्क"         },
+    { key: "utrNumber",     label: "UTR"           },
     { key: "paymentStatus", label: "भुगतान स्थिति" },
   ];
 
@@ -442,6 +447,7 @@ function TourBookingsSection({ data, loading }) {
                   <SortTh label="भ्रमण दिनांक" field="visitDate" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                   <SortTh label="आगंतुक" field="visitorCount" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                   <SortTh label="शुल्क" field="amount" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                  <th className="px-4 py-3 text-[11px] font-semibold text-[#9b8880]">UTR</th>
                   <th className="px-4 py-3 text-[11px] font-semibold text-[#9b8880]">भुगतान</th>
                   <SortTh label="जारी दिनांक" field="issuedAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                 </tr>
@@ -456,6 +462,7 @@ function TourBookingsSection({ data, loading }) {
                     <td className="px-4 py-3.5 text-sm text-[#6f5b55]">{formatVisitDate(row.visitDate)}</td>
                     <td className="px-4 py-3.5 text-center text-sm font-semibold text-[#4a1720]">{row.visitorCount || "—"}</td>
                     <td className="px-4 py-3.5 text-sm font-bold text-[#4a1720]">{rupee(row.amount)}</td>
+                    <td className="px-4 py-3.5 text-xs font-mono text-[#6f5b55]">{row.utrNumber || "—"}</td>
                     <td className="px-4 py-3.5"><StatusBadge status={row.paymentStatus || row.status} /></td>
                     <td className="px-4 py-3.5 text-xs text-[#9b8880]">{formatTimestamp(row.issuedAt)}</td>
                   </tr>
@@ -471,6 +478,136 @@ function TourBookingsSection({ data, loading }) {
               {filtered.reduce((s, r) => s + Number(r.visitorCount || 0), 0)}
             </span>{" "}
             · कुल संग्रह{" "}
+            <span className="font-bold text-[#4a1720]">
+              {rupee(filtered.reduce((s, r) => s + Number(r.amount || 0), 0))}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DONATIONS SECTION
+═══════════════════════════════════════════════════════════ */
+function DonationsSection({ data, loading }) {
+  const [search,  setSearch]  = useState("");
+  const [sortKey, setSortKey] = useState("donatedAt");
+  const [sortDir, setSortDir] = useState("desc");
+
+  const handleSort = (key) => {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir("asc"); }
+  };
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    let rows = q
+      ? data.filter((r) =>
+          `${r.name} ${r.mobile} ${r.categoryLabel} ${r.utrNumber}`
+            .toLowerCase().includes(q)
+        )
+      : [...data];
+    rows.sort((a, b) => {
+      let va = a[sortKey] ?? "";
+      let vb = b[sortKey] ?? "";
+      if (sortKey === "donatedAt") {
+        va = va?.toDate ? va.toDate() : new Date(va || 0);
+        vb = vb?.toDate ? vb.toDate() : new Date(vb || 0);
+        return sortDir === "asc" ? va - vb : vb - va;
+      }
+      if (sortKey === "amount") {
+        return sortDir === "asc" ? Number(va) - Number(vb) : Number(vb) - Number(va);
+      }
+      va = String(va).toLowerCase();
+      vb = String(vb).toLowerCase();
+      return sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
+    });
+    return rows;
+  }, [data, search, sortKey, sortDir]);
+
+  const csvCols = [
+    { key: "name",          label: "नाम"           },
+    { key: "mobile",        label: "मोबाइल"        },
+    { key: "categoryLabel", label: "श्रेणी"         },
+    { key: "amount",        label: "राशि"           },
+    { key: "utrNumber",     label: "UTR"            },
+    { key: "message",       label: "संदेश"          },
+    { key: "status",        label: "स्थिति"         },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="font-serif text-2xl text-[#4a1720]">दान प्रविष्टियाँ</h2>
+          <p className="mt-1 text-xs text-[#9b8880]">Firebase — donations collection</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#9b8880]" />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="नाम, मोबाइल, UTR…"
+              className="rounded-xl border border-[#e3d8c8] bg-white py-2 pl-9 pr-4 text-sm outline-none focus:border-[#8b2635] focus:ring-2 focus:ring-[#8b2635]/10"
+            />
+          </div>
+          <button
+            onClick={() => exportCSV(filtered, csvCols, "donations.csv")}
+            className="flex items-center gap-1.5 rounded-xl border border-[#e3d8c8] bg-white px-3 py-2 text-xs font-semibold text-[#4a1720] transition hover:bg-[#f8eee2]"
+          >
+            <Download size={14} /> CSV
+          </button>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-[#e3d8c8] bg-white">
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-[#8d7971]">
+            <LoaderCircle size={20} className="animate-spin" /> डेटा लोड हो रहा है…
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="py-16 text-center text-sm text-[#9b8880]">
+            {search ? "कोई परिणाम नहीं मिला।" : "अभी तक कोई दान नहीं।"}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[820px] text-left">
+              <thead className="border-b border-[#eee5d9] bg-[#fcfaf6]">
+                <tr>
+                  <th className="px-4 py-3 text-[11px] font-semibold text-[#9b8880]">#</th>
+                  <SortTh label="नाम"      field="name"      sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                  <th className="px-4 py-3 text-[11px] font-semibold text-[#9b8880]">मोबाइल</th>
+                  <SortTh label="श्रेणी"   field="categoryLabel" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                  <SortTh label="राशि"     field="amount"    sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                  <th className="px-4 py-3 text-[11px] font-semibold text-[#9b8880]">UTR</th>
+                  <th className="px-4 py-3 text-[11px] font-semibold text-[#9b8880]">संदेश</th>
+                  <SortTh label="दिनांक"   field="donatedAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((row, i) => (
+                  <tr key={row._id} className="border-b border-[#f0e9df] last:border-0 hover:bg-[#fcfaf6]">
+                    <td className="px-4 py-3.5 text-xs text-[#b0a098]">{i + 1}</td>
+                    <td className="px-4 py-3.5 text-sm font-semibold text-[#4a1720]">{row.name || "—"}</td>
+                    <td className="px-4 py-3.5 text-sm text-[#6f5b55]">{row.mobile || "—"}</td>
+                    <td className="px-4 py-3.5 text-xs text-[#6f5b55]">{row.categoryLabel || row.category || "—"}</td>
+                    <td className="px-4 py-3.5 text-sm font-bold text-[#4a1720]">{rupee(row.amount)}</td>
+                    <td className="px-4 py-3.5 text-xs font-mono text-[#6f5b55]">{row.utrNumber || "—"}</td>
+                    <td className="max-w-[160px] truncate px-4 py-3.5 text-xs text-[#6f5b55]">{row.message || "—"}</td>
+                    <td className="px-4 py-3.5 text-xs text-[#9b8880]">{formatTimestamp(row.donatedAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {!loading && filtered.length > 0 && (
+          <div className="border-t border-[#eee5d9] px-4 py-3 text-xs text-[#9b8880]">
+            कुल {filtered.length} दान · कुल संग्रह{" "}
             <span className="font-bold text-[#4a1720]">
               {rupee(filtered.reduce((s, r) => s + Number(r.amount || 0), 0))}
             </span>
@@ -694,10 +831,11 @@ function LiveDarshanSection({ config, onSave }) {
 /* ═══════════════════════════════════════════════════════════
    DASHBOARD SECTION
 ═══════════════════════════════════════════════════════════ */
-function DashboardSection({ members, bookings, loading, onNav }) {
-  const totalMemberAmount = members.reduce((s, r) => s + Number(r.amount || 0), 0);
-  const totalTicketAmount = bookings.reduce((s, r) => s + Number(r.amount || 0), 0);
-  const totalVisitors    = bookings.reduce((s, r) => s + Number(r.visitorCount || 0), 0);
+function DashboardSection({ members, bookings, donations = [], loading, onNav }) {
+  const totalMemberAmount  = members.reduce((s, r) => s + Number(r.amount || 0), 0);
+  const totalTicketAmount  = bookings.reduce((s, r) => s + Number(r.amount || 0), 0);
+  const totalDonationAmount = donations.reduce((s, r) => s + Number(r.amount || 0), 0);
+  const totalVisitors      = bookings.reduce((s, r) => s + Number(r.visitorCount || 0), 0);
 
   // Recent 5 of each
   const recentMembers  = [...members].slice(0, 5);
@@ -719,18 +857,18 @@ function DashboardSection({ members, bookings, loading, onNav }) {
       </section>
 
       {/* Stats */}
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard icon={Users}       iconBg="bg-[#f8eee2]" iconColor="text-[#8b2635]"
-          label="कुल सदस्य"         value={loading ? "…" : members.length}  sub="Firebase memberships" />
+          label="कुल सदस्य"         value={loading ? "…" : members.length}  sub="memberships" />
         <StatCard icon={IndianRupee} iconBg="bg-[#fff6df]" iconColor="text-[#b17b1e]"
-          label="सदस्यता संग्रह"    value={loading ? "…" : rupee(totalMemberAmount)} sub="कुल प्राप्त शुल्क" />
+          label="सदस्यता संग्रह"    value={loading ? "…" : rupee(totalMemberAmount)} sub="कुल शुल्क" />
         <StatCard icon={Ticket}      iconBg="bg-[#f3eee8]" iconColor="text-[#6b4a3e]"
-          label="भ्रमण बुकिंग"      value={loading ? "…" : bookings.length} sub="Firebase tour_bookings" />
+          label="भ्रमण बुकिंग"      value={loading ? "…" : bookings.length} sub={`${totalVisitors} आगंतुक`} />
+        <StatCard icon={Heart}       iconBg="bg-[#fdf0f0]" iconColor="text-[#8b2635]"
+          label="कुल दान"           value={loading ? "…" : donations.length} sub={rupee(totalDonationAmount)} />
         <StatCard icon={MapPin}      iconBg="bg-[#f1eee9]" iconColor="text-[#765646]"
-          label="कुल आगंतुक"        value={loading ? "…" : totalVisitors}   sub={`₹${totalTicketAmount.toLocaleString("en-IN")} संग्रह`} />
-      </section>
-
-      {/* Two-col grid */}
+          label="कुल संग्रह"        value={loading ? "…" : rupee(totalMemberAmount + totalTicketAmount + totalDonationAmount)} sub="सभी स्रोत" />
+      </section>{/* Two-col grid */}
       <section className="grid gap-6 xl:grid-cols-2">
 
         {/* Recent members */}
@@ -831,6 +969,7 @@ export default function Admin() {
   // Firebase data
   const [members,     setMembers]     = useState([]);
   const [bookings,    setBookings]    = useState([]);
+  const [donations,   setDonations]   = useState([]);
   const [liveConfig,  setLiveConfig]  = useState(null);
   const [loading,     setLoading]     = useState(false);
   const [lastFetch,   setLastFetch]   = useState(null);
@@ -838,13 +977,15 @@ export default function Admin() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [mSnap, bSnap, lSnap] = await Promise.all([
+      const [mSnap, bSnap, dSnap, lSnap] = await Promise.all([
         getDocs(query(collection(db, "memberships"),   orderBy("submittedAt", "desc"))),
         getDocs(query(collection(db, "tour_bookings"), orderBy("issuedAt",    "desc"))),
+        getDocs(query(collection(db, "donations"),     orderBy("donatedAt",   "desc"))),
         getDoc(doc(db, "live_darshan", "config")),
       ]);
       setMembers(mSnap.docs.map((d) => ({ _id: d.id, ...d.data() })));
       setBookings(bSnap.docs.map((d) => ({ _id: d.id, ...d.data() })));
+      setDonations(dSnap.docs.map((d) => ({ _id: d.id, ...d.data() })));
       if (lSnap.exists()) setLiveConfig(lSnap.data());
       setLastFetch(new Date());
     } catch {
@@ -862,6 +1003,7 @@ export default function Admin() {
     { id: "dashboard",   label: "डैशबोर्ड",    icon: LayoutDashboard },
     { id: "memberships", label: "सदस्यता",       icon: Users,        count: members.length  },
     { id: "bookings",    label: "भ्रमण बुकिंग", icon: Ticket,       count: bookings.length },
+    { id: "donations",   label: "दान",           icon: Heart,        count: donations.length },
     { id: "livedarshan", label: "लाइव दर्शन",   icon: MonitorPlay },
   ];
 
@@ -968,7 +1110,7 @@ export default function Admin() {
         <main className="p-4 sm:p-6 lg:p-8">
           {activeSection === "dashboard" && (
             <DashboardSection
-              members={members} bookings={bookings}
+              members={members} bookings={bookings} donations={donations}
               loading={loading} onNav={setActiveSection}
             />
           )}
@@ -977,6 +1119,9 @@ export default function Admin() {
           )}
           {activeSection === "bookings" && (
             <TourBookingsSection data={bookings} loading={loading} />
+          )}
+          {activeSection === "donations" && (
+            <DonationsSection data={donations} loading={loading} />
           )}
           {activeSection === "livedarshan" && (
             <LiveDarshanSection

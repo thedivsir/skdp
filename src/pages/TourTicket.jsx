@@ -11,17 +11,18 @@ import {
   LoaderCircle,
   MapPin,
   PartyPopper,
+  QrCode,
   Ticket,
   Users,
   X,
 } from "lucide-react";
+import upiQrImage from "../assets/upi-qr.png";
 import {
   collection,
   addDoc,
   serverTimestamp,
   doc,
   runTransaction,
-  getDoc,
 } from "firebase/firestore";
 import { db } from "../config/firebase";
 import TourTicketReceipt from "../components/tourTicket/TourTicketReceipt";
@@ -30,16 +31,17 @@ import generateTourTicketPDF from "../utils/generateTourTicketPDF";
 /* ─────────────────────────────────────────────────────────
    Constants
 ───────────────────────────────────────────────────────── */
-
 const TICKET_PRICE = 20;
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const UPI_ID       = "s3222094@oksbi";
+const UPI_NAME     = "Sushil Kumar Dwivedi";
 
 const initialForm = {
-  date: "",
+  date:     "",
   visitors: "1",
-  name: "",
-  mobile: "",
-  email: "",
+  name:     "",
+  mobile:   "",
+  email:    "",
+  utr:      "",
 };
 
 const fieldClass =
@@ -48,322 +50,175 @@ const fieldClass =
 /* ─────────────────────────────────────────────────────────
    Helpers
 ───────────────────────────────────────────────────────── */
-
 function getTodayLocalDate() {
   const now = new Date();
-  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 10);
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 10);
 }
 
 function formatDate(dateString) {
   if (!dateString) return "—";
   return new Date(`${dateString}T00:00:00`).toLocaleDateString("hi-IN", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-}
-
-function loadRazorpay() {
-  return new Promise((resolve) => {
-    if (window.Razorpay) { resolve(true); return; }
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.async = true;
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
+    day: "numeric", month: "long", year: "numeric",
   });
 }
 
 /* ─────────────────────────────────────────────────────────
-   Generate sequential ticket number from Firestore counter
-   Format: SKDM-2026-0000001, SKDM-2026-0000002 ...
+   Sequential ticket number via Firestore counter
 ───────────────────────────────────────────────────────── */
-
 async function generateTicketNumber() {
-  const year = new Date().getFullYear();
+  const year       = new Date().getFullYear();
   const counterRef = doc(db, "counters", `tour_tickets_${year}`);
-
-  const newSeq = await runTransaction(db, async (transaction) => {
-    const counterSnap = await transaction.get(counterRef);
-    const current = counterSnap.exists() ? (counterSnap.data().seq || 0) : 0;
-    const next = current + 1;
-    transaction.set(counterRef, { seq: next, year });
+  const seq = await runTransaction(db, async (tx) => {
+    const snap    = await tx.get(counterRef);
+    const current = snap.exists() ? (snap.data().seq || 0) : 0;
+    const next    = current + 1;
+    tx.set(counterRef, { seq: next, year });
     return next;
   });
-
-  const padded = String(newSeq).padStart(7, "0");
-  return `SKDM-${year}-${padded}`;
+  return `SKDM-${year}-${String(seq).padStart(7, "0")}`;
 }
 
 /* ─────────────────────────────────────────────────────────
    Save booking to Firestore
 ───────────────────────────────────────────────────────── */
-
-async function saveBookingToFirestore(data) {
+async function saveBooking(data) {
   await addDoc(collection(db, "tour_bookings"), {
-    ticketNumber: data.ticketNumber,
-    contactName: data.contactName,
-    mobile: data.mobile,
-    email: data.email || null,
-    visitDate: data.visitDate,
-    visitorCount: data.visitorCount,
-    amount: data.amount,
-    paymentId: data.paymentId || null,
-    paymentStatus: data.paymentStatus || "pending",
-    status: data.status || "confirmed",
-    issuedAt: serverTimestamp(),
+    ticketNumber:  data.ticketNumber,
+    contactName:   data.contactName,
+    mobile:        data.mobile,
+    email:         data.email       || null,
+    visitDate:     data.visitDate,
+    visitorCount:  data.visitorCount,
+    amount:        data.amount,
+    utrNumber:     data.utrNumber,
+    paymentStatus: "upi_submitted",
+    status:        "confirmed",
+    issuedAt:      serverTimestamp(),
   });
 }
 
-/* ─────────────────────────────────────────────────────────
-   Component
-───────────────────────────────────────────────────────── */
-
+/* ═══════════════════════════════════════════════════════════
+   COMPONENT
+═══════════════════════════════════════════════════════════ */
 export default function TourTicket() {
-  const [form, setForm] = useState(initialForm);
-  const [errors, setErrors] = useState({});
-  const [booking, setBooking] = useState(null);
-  const [paymentState, setPaymentState] = useState("idle");
-  const [statusMessage, setStatusMessage] = useState("");
-  const [isDownloading, setIsDownloading] = useState(false);
+  const [form,             setForm]             = useState(initialForm);
+  const [errors,           setErrors]           = useState({});
+  const [step,             setStep]             = useState("form");   // form | payment | success
+  const [booking,          setBooking]          = useState(null);
+  const [submitting,       setSubmitting]       = useState(false);
+  const [isDownloading,    setIsDownloading]    = useState(false);
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
 
-  const receiptRef = useRef(null);
-
+  const receiptRef   = useRef(null);
   const visitorCount = Number(form.visitors);
-  const totalAmount = visitorCount * TICKET_PRICE;
-  const minDate = useMemo(() => getTodayLocalDate(), []);
+  const totalAmount  = visitorCount * TICKET_PRICE;
+  const minDate      = useMemo(() => getTodayLocalDate(), []);
 
-  /* ── Field updater ── */
+  /* ── field updater ── */
   const update = (field, value) => {
     setForm((old) => ({ ...old, [field]: value }));
     setErrors((old) => ({ ...old, [field]: "" }));
-    if (paymentState !== "success") {
-      setStatusMessage("");
-      setPaymentState("idle");
-    }
   };
 
-  /* ── Validation ── */
-  const validate = () => {
+  /* ── Step 1 validation (form details) ── */
+  const validateForm = () => {
     const next = {};
-    if (!form.date) {
+    if (!form.date)
       next.date = "कृपया भ्रमण की तारीख चुनें।";
-    } else if (form.date < minDate) {
+    else if (form.date < minDate)
       next.date = "कृपया आज या उसके बाद की तारीख चुनें।";
-    }
-    if (!form.name.trim()) {
+    if (!form.name.trim())
       next.name = "कृपया अपना नाम दर्ज करें।";
-    }
-    if (!/^[6-9]\d{9}$/.test(form.mobile)) {
+    if (!/^[6-9]\d{9}$/.test(form.mobile))
       next.mobile = "कृपया 10 अंकों का सही मोबाइल नंबर दर्ज करें।";
-    }
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
       next.email = "कृपया सही ईमेल पता दर्ज करें।";
-    }
-    if (!Number.isInteger(visitorCount) || visitorCount < 1 || visitorCount > 20) {
+    if (!Number.isInteger(visitorCount) || visitorCount < 1 || visitorCount > 20)
       next.visitors = "कृपया 1 से 20 तक आगंतुकों की संख्या चुनें।";
-    }
     setErrors(next);
     return Object.keys(next).length === 0;
   };
 
-  /* ── Confirm booking: save to Firestore + show popup ── */
-  const confirmBooking = async (bookingData) => {
-    try {
-      await saveBookingToFirestore(bookingData);
-    } catch {
-      // Firestore save failure should not block the user from getting their ticket
-    }
-    setBooking(bookingData);
-    setPaymentState("success");
-    setShowSuccessPopup(true);
-    setStatusMessage("भुगतान सफल और टिकट की पुष्टि हो गई है। नीचे से टिकट डाउनलोड करें।");
+  /* ── Step 2 validation (UTR) ── */
+  const validateUTR = () => {
+    const next = {};
+    const utr = form.utr.trim();
+    if (!utr)
+      next.utr = "कृपया UTR / Transaction ID दर्ज करें।";
+    else if (utr.length < 8)
+      next.utr = "UTR कम से कम 8 अंकों का होना चाहिए।";
+    setErrors(next);
+    return Object.keys(next).length === 0;
   };
 
-  /* ── Begin payment ── */
-  const beginPayment = async (event) => {
-    event.preventDefault();
-    if (!validate()) return;
+  /* ── Step 1 → Show QR ── */
+  const handleProceedToPayment = (e) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+    setStep("payment");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
-    setPaymentState("creating-order");
-    setStatusMessage("बुकिंग विवरण सुरक्षित किए जा रहे हैं…");
+  /* ── Step 2 → Confirm booking ── */
+  const handleConfirmPayment = async (e) => {
+    e.preventDefault();
+    if (!validateUTR()) return;
 
-    /* ── No backend: save directly to Firestore ── */
-    if (!API_BASE_URL) {
+    setSubmitting(true);
+    try {
       const ticketNumber = await generateTicketNumber();
-      const bookingData = {
+      const bookingData  = {
         ticketNumber,
-        contactName: form.name.trim(),
-        mobile: form.mobile,
-        email: form.email.trim() || "",
-        visitDate: form.date,
+        contactName:  form.name.trim(),
+        mobile:       form.mobile,
+        email:        form.email.trim() || "",
+        visitDate:    form.date,
         visitorCount,
-        amount: totalAmount,
-        paymentId: null,
-        paymentStatus: "pending_payment",
-        status: "confirmed",
-        issuedAt: new Date().toISOString(),
+        amount:       totalAmount,
+        utrNumber:    form.utr.trim(),
+        issuedAt:     new Date().toISOString(),
       };
-      await confirmBooking(bookingData);
-      return;
-    }
 
-    /* ── With backend: Razorpay flow ── */
-    try {
-      const orderResponse = await fetch(`${API_BASE_URL}/api/tourism/create-order`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          visitDate: form.date,
-          visitorCount,
-          contactName: form.name.trim(),
-          mobile: form.mobile,
-          email: form.email.trim() || undefined,
-        }),
-      });
-
-      const orderData = await orderResponse.json().catch(() => ({}));
-      if (!orderResponse.ok) {
-        throw new Error(orderData.message || "बुकिंग ऑर्डर नहीं बनाया जा सका।");
-      }
-      if (!orderData.orderId || !orderData.keyId || !orderData.bookingId) {
-        throw new Error("सर्वर से भुगतान ऑर्डर का सही विवरण नहीं मिला।");
-      }
-
-      const loaded = await loadRazorpay();
-      if (!loaded) {
-        throw new Error("Razorpay भुगतान विंडो लोड नहीं हो सकी। कृपया पुनः प्रयास करें।");
-      }
-
-      setPaymentState("payment-open");
-      setStatusMessage("भुगतान विंडो खुल रही है…");
-
-      const razorpay = new window.Razorpay({
-        key: orderData.keyId,
-        order_id: orderData.orderId,
-        amount: orderData.amount ?? totalAmount * 100,
-        currency: orderData.currency || "INR",
-        name: "Shree Kailash Dhaam Mandir",
-        description: `मंदिर भ्रमण टिकट — ${visitorCount} आगंतुक`,
-        prefill: {
-          name: form.name.trim(),
-          contact: form.mobile,
-          email: form.email.trim(),
-        },
-        notes: {
-          bookingId: orderData.bookingId,
-          visitDate: form.date,
-          visitorCount: String(visitorCount),
-        },
-        theme: { color: "#7b1b26" },
-        modal: {
-          ondismiss: () => {
-            setPaymentState("idle");
-            setStatusMessage("भुगतान पूरा नहीं हुआ। आप चाहें तो पुनः प्रयास कर सकते हैं।");
-          },
-        },
-        handler: async (response) => {
-          setPaymentState("verifying");
-          setStatusMessage("भुगतान की पुष्टि की जा रही है…");
-
-          try {
-            const verifyResponse = await fetch(`${API_BASE_URL}/api/tourism/verify-payment`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                bookingId: orderData.bookingId,
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-              }),
-            });
-
-            const verifyData = await verifyResponse.json().catch(() => ({}));
-            if (!verifyResponse.ok || verifyData.verified !== true || !verifyData.ticketNumber) {
-              throw new Error(
-                verifyData.message ||
-                  "भुगतान की पुष्टि अभी नहीं हो सकी। कृपया भुगतान संदर्भ के साथ मंदिर प्रशासन से संपर्क करें।"
-              );
-            }
-
-            const bookingData = {
-              ticketNumber: verifyData.ticketNumber,
-              contactName: verifyData.contactName || form.name.trim(),
-              mobile: verifyData.mobile || form.mobile,
-              email: verifyData.email ?? form.email.trim(),
-              visitDate: verifyData.visitDate || form.date,
-              visitorCount: Number(verifyData.visitorCount ?? visitorCount),
-              amount: Number(verifyData.amount ?? totalAmount),
-              paymentId: verifyData.paymentId || response.razorpay_payment_id,
-              paymentStatus: "सफल",
-              status: "confirmed",
-              issuedAt: new Date().toISOString(),
-            };
-
-            await confirmBooking(bookingData);
-          } catch (error) {
-            setPaymentState("verification-error");
-            setStatusMessage(
-              error.message ||
-                "भुगतान की पुष्टि नहीं हो सकी। दोबारा भुगतान करने से पहले कृपया प्रशासन से संपर्क करें।"
-            );
-          }
-        },
-      });
-
-      razorpay.on("payment.failed", (response) => {
-        setPaymentState("idle");
-        setStatusMessage(
-          response?.error?.description || "भुगतान असफल रहा। कृपया पुनः प्रयास करें।"
-        );
-      });
-
-      razorpay.open();
-    } catch (error) {
-      setPaymentState("error");
-      setStatusMessage(
-        error.message || "बुकिंग शुरू नहीं हो सकी। कृपया सर्वर कनेक्शन जाँचकर पुनः प्रयास करें।"
-      );
+      await saveBooking(bookingData);
+      setBooking(bookingData);
+      setStep("success");
+      setShowSuccessPopup(true);
+    } catch (err) {
+      setErrors({ utr: "बुकिंग दर्ज नहीं हो सकी। कृपया पुनः प्रयास करें।" });
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  /* ── Download PDF ── */
+  /* ── PDF download ── */
   const downloadTicket = async () => {
-    if (!booking || paymentState !== "success" || !receiptRef.current) return;
+    if (!booking || !receiptRef.current) return;
     setIsDownloading(true);
     try {
       await generateTourTicketPDF(receiptRef.current, booking.ticketNumber);
-    } catch (error) {
-      setStatusMessage(error.message || "टिकट PDF तैयार नहीं हो सकी। कृपया पुनः प्रयास करें।");
+    } catch (err) {
+      console.error(err);
     } finally {
       setIsDownloading(false);
     }
   };
 
-  const isBusy = ["creating-order", "payment-open", "verifying"].includes(paymentState);
-
-  /* ─────────────────────────────────────────────────────
+  /* ═══════════════════════════════════════════════════════════
      RENDER
-  ───────────────────────────────────────────────────── */
-
+  ═══════════════════════════════════════════════════════════ */
   return (
     <main className="min-h-screen bg-[#fbf7ef] text-[#43231f]">
 
-      {/* ══════════════════════════════════════════════
-          SUCCESS POPUP MODAL
-      ══════════════════════════════════════════════ */}
+      {/* ── Success Popup ── */}
       {showSuccessPopup && booking && (
         <div
           role="dialog"
           aria-modal="true"
-          aria-labelledby="ticket-success-title"
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm"
         >
           <div className="relative w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl">
-            {/* Close button */}
             <button
               onClick={() => setShowSuccessPopup(false)}
               aria-label="बंद करें"
@@ -372,39 +227,28 @@ export default function TourTicket() {
               <X size={18} />
             </button>
 
-            {/* Icon */}
             <div className="flex justify-center">
               <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#fff4dd] text-[#e8a020]">
                 <PartyPopper size={40} />
               </div>
             </div>
 
-            {/* Text */}
             <div className="mt-5 text-center">
-              <h2
-                id="ticket-success-title"
-                className="text-2xl font-bold text-[#2d6a2d]"
-              >
-                बुकिंग सफल रही!
-              </h2>
-
+              <h2 className="text-2xl font-bold text-[#2d6a2d]">बुकिंग सफल रही!</h2>
               <p className="mt-3 text-base font-semibold text-[#43231f]">
                 नमस्ते, <span className="text-[#7b1b26]">{booking.contactName}</span> जी 🙏
               </p>
-
               <p className="mt-2 text-sm leading-7 text-[#806f62]">
-                आपकी मंदिर भ्रमण बुकिंग सफलतापूर्वक दर्ज हो गई है।
-                भ्रमण के दिन यह टिकट अवश्य साथ लाएँ।
+                आपकी बुकिंग दर्ज हो गई है। भुगतान की पुष्टि होने पर
+                मंदिर प्रशासन से संपर्क किया जाएगा।
               </p>
 
-              {/* Ticket number badge */}
               <div className="mt-4 rounded-xl border border-[#dfc58f] bg-[#fff8e8] px-5 py-3">
                 <p className="text-xs font-semibold text-[#806f62]">टिकट संख्या</p>
                 <p className="mt-1 font-bold text-[#7b1b26]">{booking.ticketNumber}</p>
               </div>
 
-              {/* Visit details */}
-              <div className="mt-3 flex items-center justify-center gap-5 text-sm">
+              <div className="mt-3 flex items-center justify-center gap-4 text-sm">
                 <div className="text-center">
                   <p className="text-xs text-[#968475]">भ्रमण दिनांक</p>
                   <p className="font-bold">{formatDate(booking.visitDate)}</p>
@@ -422,21 +266,14 @@ export default function TourTicket() {
               </div>
             </div>
 
-            {/* Download button */}
             <button
-              onClick={async () => {
-                setShowSuccessPopup(false);
-                await downloadTicket();
-              }}
+              onClick={async () => { setShowSuccessPopup(false); await downloadTicket(); }}
               disabled={isDownloading}
               className="mt-7 flex w-full items-center justify-center gap-2 rounded-xl bg-[#7b1b26] py-3 font-bold text-white transition hover:bg-[#5f111c] disabled:opacity-70"
             >
-              {isDownloading ? (
-                <LoaderCircle size={18} className="animate-spin" />
-              ) : (
-                <Download size={18} />
-              )}
-              {isDownloading ? "टिकट तैयार हो रहा है…" : "टिकट PDF डाउनलोड करें"}
+              {isDownloading
+                ? <><LoaderCircle size={18} className="animate-spin" /> टिकट तैयार हो रहा है…</>
+                : <><Download size={18} /> टिकट PDF डाउनलोड करें</>}
             </button>
 
             <button
@@ -449,289 +286,324 @@ export default function TourTicket() {
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════
-          HERO
-      ══════════════════════════════════════════════ */}
+      {/* ── Hero ── */}
       <section className="bg-[#4b111d]">
         <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
-          <Link
-            to="/tourism"
-            className="inline-flex items-center gap-2 text-sm text-[#e8c77f] hover:text-white"
-          >
+          <Link to="/tourism" className="inline-flex items-center gap-2 text-sm text-[#e8c77f] hover:text-white">
             <ArrowLeft size={17} />
             पर्यटन पृष्ठ पर वापस जाएँ
           </Link>
-
           <p className="mt-6 text-sm font-semibold text-[#e8c77f]">मंदिर पर्यटन</p>
-          <h1 className="mt-2 text-3xl font-bold text-[#fff5e4] sm:text-4xl">
-            मंदिर भ्रमण टिकट
-          </h1>
+          <h1 className="mt-2 text-3xl font-bold text-[#fff5e4] sm:text-4xl">मंदिर भ्रमण टिकट</h1>
           <p className="mt-4 max-w-2xl text-sm leading-7 text-[#f2dfce] sm:text-base">
             भूमि तल और चारों ऊपरी तल के भ्रमण के लिए एक ही टूर टिकट।
-            टिकट शुल्क ₹20 प्रति व्यक्ति है।
+            टिकट शुल्क ₹{TICKET_PRICE} प्रति व्यक्ति है।
           </p>
         </div>
       </section>
 
-      {/* ══════════════════════════════════════════════
-          BOOKING FORM + SIDEBAR
-      ══════════════════════════════════════════════ */}
-      <section className="mx-auto grid max-w-7xl items-start gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:px-8">
-        <form
-          onSubmit={beginPayment}
-          noValidate
-          className="space-y-6 rounded-2xl border border-[#e8ddca] bg-white p-5 sm:p-7"
-        >
-          <div className="flex items-center gap-3">
-            <Ticket size={25} className="text-[#9a642a]" />
+      {/* ── Step Progress ── */}
+      <div className="border-b border-[#e8ddca] bg-white">
+        <div className="mx-auto flex max-w-2xl items-center gap-0 px-4 py-4">
+          {[
+            { n: 1, label: "विवरण भरें" },
+            { n: 2, label: "UPI भुगतान" },
+            { n: 3, label: "टिकट डाउनलोड" },
+          ].map(({ n, label }, i) => {
+            const stepNum = step === "form" ? 1 : step === "payment" ? 2 : 3;
+            const done    = stepNum > n;
+            const active  = stepNum === n;
+            return (
+              <div key={n} className="flex flex-1 items-center">
+                <div className="flex flex-col items-center gap-1">
+                  <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold transition-colors
+                    ${done   ? "bg-[#2d6a2d] text-white" :
+                      active ? "bg-[#7b1b26] text-white" :
+                               "bg-[#e8ddca] text-[#9b8880]"}`}>
+                    {done ? <CheckCircle2 size={16} /> : n}
+                  </div>
+                  <p className={`text-[10px] font-semibold ${active ? "text-[#7b1b26]" : done ? "text-[#2d6a2d]" : "text-[#9b8880]"}`}>
+                    {label}
+                  </p>
+                </div>
+                {i < 2 && <div className={`mx-2 h-0.5 flex-1 ${done ? "bg-[#2d6a2d]" : "bg-[#e8ddca]"}`} />}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <section className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
+
+        {/* ══════════════════════════════════════════════
+            STEP 1 — FORM DETAILS
+        ══════════════════════════════════════════════ */}
+        {step === "form" && (
+          <form onSubmit={handleProceedToPayment} noValidate className="space-y-5 rounded-2xl border border-[#e8ddca] bg-white p-6">
+            <div className="flex items-center gap-3">
+              <Ticket size={24} className="text-[#9a642a]" />
+              <div>
+                <h2 className="text-xl font-bold">टिकट बुकिंग विवरण</h2>
+                <p className="text-sm text-[#806f62]">जानकारी भरें, फिर UPI से भुगतान करें।</p>
+              </div>
+            </div>
+
+            {/* Date */}
             <div>
-              <h2 className="text-xl font-bold">टिकट बुकिंग विवरण</h2>
-              <p className="mt-1 text-sm text-[#806f62]">
-                जानकारी भरें और सुरक्षित भुगतान करें।
-              </p>
+              <label htmlFor="tour-date" className="mb-2 block text-sm font-semibold">
+                भ्रमण की तारीख <span className="text-red-600">*</span>
+              </label>
+              <div className="relative">
+                <CalendarDays size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#968475]" />
+                <input
+                  id="tour-date" type="date" min={minDate}
+                  value={form.date} onChange={(e) => update("date", e.target.value)}
+                  className={`${fieldClass} pl-10`}
+                />
+              </div>
+              {errors.date && <p className="mt-1 text-xs text-red-700">{errors.date}</p>}
             </div>
-          </div>
 
-          {/* Status message */}
-          {statusMessage && (
-            <div
-              role="status"
-              aria-live="polite"
-              className={`rounded-xl border p-4 text-sm leading-7 ${
-                paymentState === "success"
-                  ? "border-green-200 bg-green-50 text-green-900"
-                  : paymentState === "error" || paymentState === "verification-error"
-                  ? "border-red-200 bg-red-50 text-red-800"
-                  : "border-[#dfc58f] bg-[#fff8e8] text-[#67431f]"
-              }`}
-            >
-              {paymentState === "success" ? (
-                <CheckCircle2 size={20} className="mb-2 inline" />
-              ) : isBusy ? (
-                <LoaderCircle size={18} className="mr-2 inline animate-spin" />
-              ) : (
-                <Info size={18} className="mr-2 inline" />
-              )}{" "}
-              {statusMessage}
+            {/* Visitors */}
+            <div>
+              <label htmlFor="tour-visitors" className="mb-2 block text-sm font-semibold">
+                कुल आगंतुक <span className="text-red-600">*</span>
+              </label>
+              <div className="relative">
+                <Users size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#968475]" />
+                <select
+                  id="tour-visitors"
+                  value={form.visitors} onChange={(e) => update("visitors", e.target.value)}
+                  className={`${fieldClass} pl-10`}
+                >
+                  {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
+                    <option key={n} value={n}>{n} आगंतुक</option>
+                  ))}
+                </select>
+              </div>
+              {errors.visitors && <p className="mt-1 text-xs text-red-700">{errors.visitors}</p>}
             </div>
-          )}
 
-          {/* Date */}
-          <div>
-            <label htmlFor="tour-date" className="mb-2 block text-sm font-semibold">
-              भ्रमण की पसंदीदा तारीख <span className="text-red-600">*</span>
-            </label>
-            <div className="relative">
-              <CalendarDays
-                size={17}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#968475]"
-              />
+            {/* Name */}
+            <div>
+              <label htmlFor="tour-name" className="mb-2 block text-sm font-semibold">
+                संपर्क व्यक्ति का नाम <span className="text-red-600">*</span>
+              </label>
               <input
-                id="tour-date"
-                type="date"
-                min={minDate}
-                required
-                value={form.date}
-                disabled={isBusy || paymentState === "success"}
-                onChange={(e) => update("date", e.target.value)}
-                className={`${fieldClass} pl-10 disabled:bg-gray-100`}
+                id="tour-name" autoComplete="name" placeholder="पूरा नाम"
+                value={form.name} onChange={(e) => update("name", e.target.value)}
+                className={fieldClass}
               />
+              {errors.name && <p className="mt-1 text-xs text-red-700">{errors.name}</p>}
             </div>
-            {errors.date && <p className="mt-1 text-xs text-red-700">{errors.date}</p>}
-          </div>
 
-          {/* Visitors */}
-          <div>
-            <label htmlFor="tour-visitors" className="mb-2 block text-sm font-semibold">
-              कुल आगंतुक <span className="text-red-600">*</span>
-            </label>
-            <div className="relative">
-              <Users
-                size={17}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#968475]"
+            {/* Mobile */}
+            <div>
+              <label htmlFor="tour-mobile" className="mb-2 block text-sm font-semibold">
+                मोबाइल नंबर <span className="text-red-600">*</span>
+              </label>
+              <input
+                id="tour-mobile" type="tel" inputMode="numeric" maxLength={10}
+                placeholder="10 अंकों का मोबाइल नंबर"
+                value={form.mobile}
+                onChange={(e) => update("mobile", e.target.value.replace(/\D/g, "").slice(0, 10))}
+                className={fieldClass}
               />
-              <select
-                id="tour-visitors"
-                value={form.visitors}
-                disabled={isBusy || paymentState === "success"}
-                onChange={(e) => update("visitors", e.target.value)}
-                className={`${fieldClass} pl-10 disabled:bg-gray-100`}
-              >
-                {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
-                  <option key={n} value={n}>
-                    {n} आगंतुक
-                  </option>
-                ))}
-              </select>
+              {errors.mobile && <p className="mt-1 text-xs text-red-700">{errors.mobile}</p>}
             </div>
-            {errors.visitors && (
-              <p className="mt-1 text-xs text-red-700">{errors.visitors}</p>
-            )}
-            <p className="mt-2 text-xs leading-6 text-[#806f62]">
-              प्रत्येक आगंतुक के लिए एक टिकट आवश्यक है।
-            </p>
-          </div>
 
-          {/* Name */}
-          <div>
-            <label htmlFor="tour-name" className="mb-2 block text-sm font-semibold">
-              संपर्क व्यक्ति का नाम <span className="text-red-600">*</span>
-            </label>
-            <input
-              id="tour-name"
-              autoComplete="name"
-              value={form.name}
-              disabled={isBusy || paymentState === "success"}
-              onChange={(e) => update("name", e.target.value)}
-              placeholder="पूरा नाम"
-              className={`${fieldClass} disabled:bg-gray-100`}
-            />
-            {errors.name && <p className="mt-1 text-xs text-red-700">{errors.name}</p>}
-          </div>
-
-          {/* Mobile */}
-          <div>
-            <label htmlFor="tour-mobile" className="mb-2 block text-sm font-semibold">
-              मोबाइल नंबर <span className="text-red-600">*</span>
-            </label>
-            <input
-              id="tour-mobile"
-              type="tel"
-              inputMode="numeric"
-              autoComplete="tel-national"
-              maxLength={10}
-              value={form.mobile}
-              disabled={isBusy || paymentState === "success"}
-              onChange={(e) =>
-                update("mobile", e.target.value.replace(/\D/g, "").slice(0, 10))
-              }
-              placeholder="10 अंकों का मोबाइल नंबर"
-              className={`${fieldClass} disabled:bg-gray-100`}
-            />
-            {errors.mobile && (
-              <p className="mt-1 text-xs text-red-700">{errors.mobile}</p>
-            )}
-          </div>
-
-          {/* Email */}
-          <div>
-            <label htmlFor="tour-email" className="mb-2 block text-sm font-semibold">
-              ईमेल पता <span className="text-[#968475]">(वैकल्पिक)</span>
-            </label>
-            <input
-              id="tour-email"
-              type="email"
-              autoComplete="email"
-              value={form.email}
-              disabled={isBusy || paymentState === "success"}
-              onChange={(e) => update("email", e.target.value)}
-              placeholder="name@example.com"
-              className={`${fieldClass} disabled:bg-gray-100`}
-            />
-            {errors.email && (
-              <p className="mt-1 text-xs text-red-700">{errors.email}</p>
-            )}
-          </div>
-
-          {/* Amount summary */}
-          <div className="rounded-xl border border-[#e8ddca] bg-[#fbf7ef] p-5">
-            <h3 className="font-bold">टिकट शुल्क विवरण</h3>
-            <div className="mt-4 flex items-center justify-between gap-4 text-sm">
-              <span className="text-[#806f62]">प्रति व्यक्ति शुल्क</span>
-              <span className="font-semibold">₹20</span>
+            {/* Email */}
+            <div>
+              <label htmlFor="tour-email" className="mb-2 block text-sm font-semibold">
+                ईमेल पता <span className="text-[#968475]">(वैकल्पिक)</span>
+              </label>
+              <input
+                id="tour-email" type="email" placeholder="name@example.com"
+                value={form.email} onChange={(e) => update("email", e.target.value)}
+                className={fieldClass}
+              />
+              {errors.email && <p className="mt-1 text-xs text-red-700">{errors.email}</p>}
             </div>
-            <div className="mt-3 flex items-center justify-between gap-4 text-sm">
-              <span className="text-[#806f62]">कुल आगंतुक</span>
-              <span className="font-semibold">{visitorCount}</span>
-            </div>
-            <div className="my-4 h-px bg-[#e8ddca]" />
-            <div className="flex items-center justify-between gap-4">
-              <span className="font-bold">कुल टिकट शुल्क</span>
-              <span className="text-2xl font-bold text-[#7b1b26]">₹{totalAmount}</span>
-            </div>
-          </div>
 
-          {/* Submit / Download button */}
-          {paymentState === "success" && booking ? (
-            <button
-              type="button"
-              onClick={downloadTicket}
-              disabled={isDownloading}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#7b1b26] px-5 py-3.5 font-bold text-white transition hover:bg-[#5f111c] disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {isDownloading ? (
-                <LoaderCircle size={18} className="animate-spin" />
-              ) : (
-                <Download size={18} />
-              )}
-              {isDownloading ? "टिकट तैयार हो रहा है…" : "टिकट डाउनलोड करें"}
-            </button>
-          ) : (
+            {/* Amount summary */}
+            <div className="rounded-xl border border-[#e8ddca] bg-[#fbf7ef] p-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-[#806f62]">प्रति व्यक्ति</span>
+                <span className="font-semibold">₹{TICKET_PRICE}</span>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-sm">
+                <span className="text-[#806f62]">आगंतुक</span>
+                <span className="font-semibold">{visitorCount}</span>
+              </div>
+              <div className="mt-3 flex items-center justify-between border-t border-[#e8ddca] pt-3">
+                <span className="font-bold">कुल शुल्क</span>
+                <span className="text-2xl font-bold text-[#7b1b26]">₹{totalAmount}</span>
+              </div>
+            </div>
+
             <button
               type="submit"
-              disabled={isBusy}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#7b1b26] px-5 py-3.5 font-bold text-white transition hover:bg-[#5f111c] disabled:cursor-not-allowed disabled:opacity-70"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#7b1b26] py-3.5 font-bold text-white transition hover:bg-[#5f111c]"
             >
-              {isBusy ? (
-                <>
-                  <LoaderCircle size={18} className="animate-spin" />
-                  कृपया प्रतीक्षा करें…
-                </>
-              ) : (
-                <>
-                  भुगतान करें — ₹{totalAmount}
-                  <ArrowRight size={18} />
-                </>
-              )}
+              आगे बढ़ें — UPI से भुगतान करें
+              <ArrowRight size={18} />
             </button>
-          )}
+          </form>
+        )}
 
-          <p className="text-xs leading-6 text-[#89796a]">
-            टिकट केवल सर्वर द्वारा भुगतान की पुष्टि के बाद जारी होगा। भुगतान विंडो बंद
-            होने या नेटवर्क समस्या आने पर दोबारा भुगतान करने से पहले भुगतान की स्थिति
-            जाँचें।
-          </p>
-        </form>
+        {/* ══════════════════════════════════════════════
+            STEP 2 — QR + UTR
+        ══════════════════════════════════════════════ */}
+        {step === "payment" && (
+          <div className="space-y-5">
+            {/* Amount reminder */}
+            <div className="rounded-2xl border border-[#e8ddca] bg-white p-5 text-center">
+              <p className="text-sm text-[#806f62]">भुगतान राशि</p>
+              <p className="mt-1 text-4xl font-bold text-[#7b1b26]">₹{totalAmount}</p>
+              <p className="mt-1 text-xs text-[#968475]">
+                {visitorCount} आगंतुक × ₹{TICKET_PRICE} — {formatDate(form.date)}
+              </p>
+            </div>
 
-        {/* ── Sidebar ── */}
-        <aside className="space-y-5">
-          <div className="rounded-2xl bg-[#4b111d] p-6 text-[#fff5e4]">
-            <Ticket size={28} className="text-[#e8c77f]" />
-            <h2 className="mt-4 text-xl font-bold">एक टिकट, पाँच स्तर</h2>
-            <p className="mt-3 text-sm leading-7 text-[#f2dfce]">
-              प्रस्तावित टूर में भूमि तल तथा प्रथम, द्वितीय, तृतीय और चतुर्थ तल शामिल हैं।
+            {/* QR Code card */}
+            <div className="overflow-hidden rounded-2xl border border-[#e8ddca] bg-white">
+              <div className="bg-[#4b111d] px-5 py-4 text-center">
+                <div className="flex items-center justify-center gap-2 text-[#e8c77f]">
+                  <QrCode size={20} />
+                  <h2 className="font-bold">UPI से भुगतान करें</h2>
+                </div>
+                <p className="mt-1 text-xs text-[#f2dfce]">
+                  नीचे QR स्कैन करें या UPI ID पर भुगतान करें
+                </p>
+              </div>
+
+              <div className="p-6">
+                {/* QR Image */}
+                <div className="flex justify-center">
+                  <div className="rounded-2xl border-2 border-[#e8ddca] bg-white p-3 shadow-sm">
+                    <img
+                      src={upiQrImage}
+                      alt="UPI QR Code"
+                      className="h-56 w-56 object-contain"
+                    />
+                  </div>
+                </div>
+
+                {/* UPI ID */}
+                <div className="mt-4 rounded-xl border border-[#e8ddca] bg-[#fbf7ef] p-4 text-center">
+                  <p className="text-xs font-semibold text-[#806f62]">UPI ID</p>
+                  <p className="mt-1 font-bold text-[#4b111d] tracking-wide text-lg">{UPI_ID}</p>
+                  <p className="mt-0.5 text-sm text-[#806f62]">{UPI_NAME}</p>
+                </div>
+
+                {/* Steps */}
+                <div className="mt-4 space-y-2">
+                  {[
+                    "GPay, PhonePe या कोई भी UPI app खोलें",
+                    `QR scan करें या UPI ID "${UPI_ID}" डालें`,
+                    `₹${totalAmount} का भुगतान करें`,
+                    "Transaction ID (UTR) नोट करें",
+                  ].map((step, i) => (
+                    <div key={i} className="flex items-start gap-3 text-sm text-[#4a3020]">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#7b1b26] text-xs font-bold text-white">
+                        {i + 1}
+                      </span>
+                      {step}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* UTR form */}
+            <form onSubmit={handleConfirmPayment} noValidate className="rounded-2xl border border-[#e8ddca] bg-white p-6 space-y-4">
+              <div>
+                <h3 className="font-bold text-[#4b111d]">भुगतान की पुष्टि करें</h3>
+                <p className="mt-1 text-sm text-[#806f62]">
+                  भुगतान के बाद GPay/PhonePe से मिला <strong>Transaction ID (UTR)</strong> दर्ज करें।
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="utr" className="mb-2 block text-sm font-semibold">
+                  Transaction ID / UTR Number <span className="text-red-600">*</span>
+                </label>
+                <input
+                  id="utr"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="जैसे: 425612345678"
+                  value={form.utr}
+                  onChange={(e) => update("utr", e.target.value.trim())}
+                  className={fieldClass}
+                />
+                {errors.utr && <p className="mt-1 text-xs text-red-700">{errors.utr}</p>}
+                <p className="mt-2 text-xs leading-5 text-[#806f62]">
+                  GPay: भुगतान के बाद Transaction details में UPI Transaction ID मिलेगी।
+                  PhonePe: Transaction History → UPI Reference Number।
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setStep("form")}
+                  className="flex-1 rounded-xl border border-[#e8ddca] py-3 text-sm font-semibold text-[#806f62] transition hover:bg-[#fbf7ef]"
+                >
+                  ← वापस
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-[#7b1b26] py-3 font-bold text-white transition hover:bg-[#5f111c] disabled:opacity-60"
+                >
+                  {submitting
+                    ? <><LoaderCircle size={16} className="animate-spin" /> टिकट बन रहा है…</>
+                    : <><CheckCircle2 size={16} /> बुकिंग पूरी करें</>}
+                </button>
+              </div>
+
+              <p className="flex items-start gap-2 text-xs leading-5 text-[#806f62]">
+                <Info size={14} className="mt-0.5 shrink-0 text-[#9a642a]" />
+                भुगतान की जाँच मंदिर प्रशासन द्वारा की जाएगी। गलत UTR देने पर बुकिंग रद्द हो सकती है।
+              </p>
+            </form>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════
+            STEP 3 — SUCCESS
+        ══════════════════════════════════════════════ */}
+        {step === "success" && booking && (
+          <div className="rounded-2xl border border-[#e8ddca] bg-white p-6 text-center space-y-4">
+            <div className="flex justify-center">
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#f0faf0] text-[#2d6a2d]">
+                <CheckCircle2 size={40} />
+              </div>
+            </div>
+            <h2 className="text-2xl font-bold text-[#2d6a2d]">बुकिंग दर्ज हो गई!</h2>
+            <div className="rounded-xl border border-[#dfc58f] bg-[#fff8e8] px-5 py-3">
+              <p className="text-xs text-[#806f62]">टिकट संख्या</p>
+              <p className="mt-1 font-bold text-[#7b1b26] text-lg">{booking.ticketNumber}</p>
+            </div>
+            <p className="text-sm text-[#806f62]">
+              UTR: <span className="font-semibold text-[#4b111d]">{booking.utrNumber}</span>
             </p>
-            <div className="mt-5 border-t border-white/15 pt-4">
-              <p className="text-sm text-[#e8c77f]">टिकट शुल्क</p>
-              <p className="mt-1 text-3xl font-bold">₹20</p>
-              <p className="mt-1 text-sm text-[#f2dfce]">प्रति व्यक्ति</p>
-            </div>
+            <button
+              onClick={downloadTicket}
+              disabled={isDownloading}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#7b1b26] py-3 font-bold text-white transition hover:bg-[#5f111c] disabled:opacity-70"
+            >
+              {isDownloading
+                ? <><LoaderCircle size={18} className="animate-spin" /> टिकट तैयार हो रहा है…</>
+                : <><Download size={18} /> टिकट PDF डाउनलोड करें</>}
+            </button>
           </div>
-
-          <div className="rounded-2xl border border-[#e8ddca] bg-white p-5">
-            <h3 className="font-bold">महत्वपूर्ण जानकारी</h3>
-            <div className="mt-4 space-y-4 text-sm leading-6 text-[#806f62]">
-              <p className="flex items-start gap-2">
-                <Clock3 size={18} className="mt-1 shrink-0 text-[#9a642a]" />
-                भ्रमण समय एवं उपलब्धता की पुष्टि आवश्यक है।
-              </p>
-              <p className="flex items-start gap-2">
-                <Info size={18} className="mt-1 shrink-0 text-[#9a642a]" />
-                टिकट जारी होने के बाद ही बुकिंग की पुष्टि मानी जाएगी।
-              </p>
-              <p className="flex items-start gap-2">
-                <MapPin size={18} className="mt-1 shrink-0 text-[#9a642a]" />
-                खटंगिया, दौना रोड, जसरा, प्रयागराज, उत्तर प्रदेश।
-              </p>
-            </div>
-          </div>
-        </aside>
+        )}
       </section>
 
-      {/* ══════════════════════════════════════════════
-          OFF-SCREEN RECEIPT for PDF capture
-      ══════════════════════════════════════════════ */}
-      {booking && paymentState === "success" && (
+      {/* Off-screen receipt for PDF */}
+      {booking && step === "success" && (
         <TourTicketReceipt booking={booking} receiptRef={receiptRef} />
       )}
     </main>

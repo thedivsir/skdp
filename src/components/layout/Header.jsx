@@ -70,7 +70,7 @@ const navigationItems = [
         path: "/membership",
       },
       {
-        label: "मंदिर भ्रमण टिकट बुकिंग",
+        label: "पंचतल टिकट बुकिंग",
         path: "/tourism/ticket",
       },
       {
